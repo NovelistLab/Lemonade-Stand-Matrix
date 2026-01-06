@@ -1,819 +1,312 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Lemonade Matrix: Ultimate Edition</title>
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Three.js for 3D simulation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif; /* Fallback/Standard Font */
-            background-color: #0d0d1e; /* Dark, matrix background */
-            color: #00ff66; /* Neon green text */
-        }
-        #game-canvas {
-            display: block;
-            width: 100%;
-            height: 400px;
-            border: 4px solid #00ff66;
-            box-shadow: 0 0 15px rgba(0, 255, 102, 0.5);
-            margin: 0 auto;
-        }
-        .neon-glow {
-            text-shadow: 0 0 5px #00ff66, 0 0 10px #00ff66;
-        }
-        .neon-stat {
-            font-size: 1.25rem; 
-            font-weight: bold;
-        }
-        .neon-button {
-            background-color: #008844;
-            color: #fff;
-            box-shadow: 0 0 5px #00ff66;
-            transition: all 0.2s;
-        }
-        .neon-button:hover:not(:disabled) {
-            background-color: #00ff66;
-            color: #0d0d1e;
-            box-shadow: 0 0 20px #00ff66;
-            transform: scale(1.02);
-        }
-        .neon-button:disabled {
-            background-color: #333333; 
-            color: #666;
-            box-shadow: none;
-            cursor: not-allowed;
-        }
-        .card-bg {
-            background-color: #1a1a38; 
-            border: 2px solid #00ff66;
-        }
-
-        /* --- ANIMATED STATUS STYLES --- */
-        @keyframes pulse-green {
-            0% { box-shadow: 0 0 0 0 rgba(0, 255, 102, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(0, 255, 102, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 255, 102, 0); }
-        }
-
-        .status-pulse {
-            animation: pulse-green 2s infinite;
-        }
-        
-        #stand-status-card {
-            transition: all 0.5s ease;
-        }
-        #stand-status-text {
-             text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
-        }
-        /* Ensure the entire body takes up minimal space for the iFrame */
-        body {
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            min-height: 100vh;
-        }
-        #app-container {
-            padding: 1rem;
-        }
-        
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lemonade Stand: Escape the Matrix</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/vuex@4/dist/vuex.global.prod.js"></script>
+  <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; }
+    .stand-section { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+    .errors { color: red; }
+    .matrix-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stand-0 { grid-area: 1 / 1; }
+    .stand-1 { grid-area: 1 / 2; }
+    .stand-2 { grid-area: 2 / 1; }
+    .stand-3 { grid-area: 2 / 2; }
+    .matrix-cell { border: 1px solid #ddd; padding: 10px; }
+    .audio-player { margin-bottom: 20px; }
+    .volume-control { margin-top: 10px; }
+    input { width: 100%; box-sizing: border-box; margin: 5px 0; padding: 8px; font-size: 16px; }
+    button { padding: 10px 20px; font-size: 16px; min-width: 44px; min-height: 44px; cursor: pointer; }
+    @media (max-width: 600px) {
+      .matrix-grid { grid-template-columns: 1fr; }
+      .stand-0, .stand-1, .stand-2, .stand-3 { grid-area: auto; }
+      h1 { font-size: 1.5em; }
+      h3 { font-size: 1.2em; }
+      p { font-size: 0.9em; }
+      iframe { height: 120px; }
+      button { width: 100%; padding: 15px; font-size: 18px; }
+      input { font-size: 18px; padding: 12px; }
+    }
+  </style>
 </head>
-<body class="flex items-start justify-center">
+<body>
+  <div id="app"></div>
+  <script>
+    const { createApp, ref, computed } = Vue;
+    const { createStore } = Vuex;
+    const { createRouter, createWebHistory } = VueRouter;
 
-    <div id="app-container" class="w-full max-w-5xl space-y-4">
+    const FORECASTS = [
+      { label: 'Sunny', salesRange: [60, 90], chanceOfRain: 10 },
+      { label: 'Cloudy', salesRange: [40, 60], chanceOfRain: 40 },
+      { label: 'Storms', salesRange: [20, 40], chanceOfRain: 70 },
+      { label: 'Heat Wave', salesRange: [70, 100], chanceOfRain: 5 },
+      { label: 'Partly Cloudy', salesRange: [50, 70], chanceOfRain: 20 }
+    ];
 
-        <header class="text-center mb-4">
-            <h1 class="text-3xl font-extrabold neon-glow">THE LEMONADE MATRIX: ULTIMATE</h1>
-            <p class="text-sm text-gray-400">Management + Simulation = Escape</p>
-        </header>
+    const SIGN_COST = 15;
+    const RAIN_PENALTY = 33;
+    const STAND_SETUP_COST = 50;
+    const MAX_STANDS = 4;
+    const STAND_MULTIPLIERS = [0.8, 1.0, 1.0, 1.2];
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    function getRandomInt(min, max) {
+      min = Math.ceil(min);
+      max = Math.floor(max);
+      return Math.floor(Math.random() * (max - min)) + min;
+    }
 
-            <!-- 1. Status & Stats (Left Column) -->
-            <div class="lg:col-span-1 space-y-4">
-                
-                <!-- Animated Stand Status Card -->
-                <div id="stand-status-card" class="p-4 rounded-xl shadow-lg bg-red-600 text-white transition-all duration-500 card-bg">
-                    <h2 class="text-xl font-bold mb-3 neon-glow border-b border-gray-700 pb-2">OPERATIONAL STATUS</h2>
-                    <div class="flex items-center justify-between">
-                        <span id="stand-status-text" class="text-3xl font-extrabold text-white">SYSTEM OFFLINE</span>
-                        <div id="stand-status-indicator" class="text-5xl">🛑</div>
-                    </div>
-                </div>
+    const store = createStore({
+      state: {
+        day: 0,
+        assets: 200,
+        stands: [],
+        errors: [],
+        message: '',
+        salesReport: []
+      },
+      mutations: {
+        reset(state) {
+          state.day = 0;
+          state.assets = 200;
+          state.stands = [{ id: 0, active: true, forecast: null, glasses: 30, signs: 2, price: 10 }];
+          state.errors = [];
+          state.message = '';
+          state.salesReport = [];
+        },
+        generateForecasts(state) {
+          state.stands.forEach(stand => {
+            if (stand.active) {
+              let idx = getRandomInt(0, FORECASTS.length);
+              let forecast = { ...FORECASTS[idx] };
+              forecast.chanceOfRain = Math.max(0, Math.min(100, forecast.chanceOfRain + getRandomInt(-10, 11)));
+              forecast.salesRange[0] = Math.max(0, forecast.salesRange[0] + getRandomInt(-5, 6));
+              forecast.salesRange[1] = Math.max(forecast.salesRange[0] + 1, forecast.salesRange[1] + getRandomInt(-5, 6));
+              stand.forecast = forecast;
+            }
+          });
+          state.message = '';
+          state.day++;
+        },
+        buyStand(state) {
+          if (state.stands.length >= MAX_STANDS || state.assets < STAND_SETUP_COST) return;
+          let newId = state.stands.length;
+          state.stands.push({ id: newId, active: true, forecast: null, glasses: 20, signs: 1, price: 12 });
+          state.assets -= STAND_SETUP_COST;
+        },
+        doSales(state, salesData) {
+          state.errors = [];
+          let totalCost = 0;
+          let validStands = [];
+          salesData.forEach(data => {
+            let stand = state.stands.find(s => s.id === data.standId);
+            if (!stand || !stand.active) return state.errors.push(`Invalid stand ${data.standId + 1}.`);
+            if (data.glasses <= 0) return state.errors.push(`Stand ${data.standId + 1}: Must make at least 1 glass.`);
+            if (data.signs < 0) return state.errors.push(`Stand ${data.standId + 1}: Signs cannot be negative.`);
+            if (data.price < data.costOfLemonade) return state.errors.push(`Stand ${data.standId + 1}: Price must be at least cost (${data.costOfLemonade}¢).`);
+            let standCost = data.glasses * data.costOfLemonade + data.signs * SIGN_COST;
+            totalCost += standCost;
+            validStands.push({ ...data, standCost });
+          });
+          if (totalCost > state.assets) return state.errors.push(`Total expenses (${(totalCost / 100).toFixed(2)}) exceed assets (${(state.assets / 100).toFixed(2)}).`);
+          if (state.errors.length > 0) return;
+          state.salesReport = [];
+          let totalIncome = 0;
+          let rainMessages = [];
+          validStands.forEach(data => {
+            let stand = state.stands.find(s => s.id === data.standId);
+            let range = stand.forecast.salesRange;
+            let signsBonus = data.signs === 0 ? -20 : data.signs === 1 ? -10 : data.signs <= 4 ? 10 : data.signs <= 6 ? 15 : 20;
+            let costBonus = data.price < 10 ? 25 : data.price < 30 ? 15 : data.price < 50 ? 10 : data.price < 75 ? 5 : data.price < 100 ? 0 : -10;
+            let didItRain = getRandomInt(0, 100) < stand.forecast.chanceOfRain;
+            if (didItRain) rainMessages.push(`Stand ${data.standId + 1}`);
+            let percentSold = getRandomInt(range[0], range[1] + 1) + signsBonus + costBonus;
+            if (didItRain) percentSold -= RAIN_PENALTY;
+            percentSold = Math.max(0, Math.min(100, percentSold)) * STAND_MULTIPLIERS[data.standId];
+            let glassesSold = Math.min(data.glasses, Math.floor((percentSold / 100) * data.glasses));
+            let income = glassesSold * data.price;
+            state.salesReport.push({ standId: data.standId, glassesSold, income, standCost: data.standCost });
+            totalIncome += income;
+          });
+          state.assets += totalIncome - totalCost;
+          if (rainMessages.length > 0) state.message = `It rained on: ${rainMessages.join(', ')}!`;
+        }
+      },
+      getters: {
+        costOfLemonade(state) { return state.day > 2 ? 4 : 2; },
+        activeStands(state) { return state.stands.filter(s => s.active); },
+        canBuyStand(state) { return state.stands.length < MAX_STANDS && state.assets >= STAND_SETUP_COST; },
+        totalIncome(state) { return state.salesReport.reduce((sum, r) => sum + r.income, 0) / 100; },
+        totalExpenses(state) { return state.salesReport.reduce((sum, r) => sum + r.standCost, 0) / 100; },
+        profit(state, getters) { return getters.totalIncome - getters.totalExpenses; },
+        isBankrupt(state) { return state.assets < 0; },
+        isGameOver(state) { return state.day >= 10 || state.assets < 0; },
+        forecastLabel: () => (f) => f ? f.label : 'N/A',
+        positionLabel: () => (id) => ['Top-Left (0.8x)', 'Top-Right (1.0x)', 'Bottom-Left (1.0x)', 'Bottom-Right (1.2x)'][id] || ''
+      }
+    });
 
-                <!-- Game Status Panel -->
-                <div id="status-panel" class="p-4 rounded-xl shadow-lg card-bg">
-                    <h2 class="text-xl font-bold mb-3 neon-glow border-b border-gray-700 pb-2">STATISTICS</h2>
-                    <div class="space-y-3 text-sm">
-                        <p>DAY: <span id="game-day" class="font-bold text-white neon-stat">1</span></p>
-                        <p>MONEY: <span id="game-money" class="font-bold text-yellow-400 neon-stat">$50.00</span></p>
-                        <p>CUPS LEFT: <span id="game-cups" class="font-bold text-blue-400 neon-stat">0</span></p>
-                        <p>CONSCIOUSNESS (CP): <span id="game-cp" class="font-bold text-red-400 neon-stat">0</span></p>
-                        <p id="game-event" class="text-xs italic text-orange-400 pt-2 border-t border-gray-700">No active events.</p>
-                    </div>
-                </div>
-
-                <!-- Upgrades Panel -->
-                <div id="upgrade-panel" class="p-4 rounded-xl shadow-lg card-bg">
-                    <h2 class="text-xl font-bold mb-3 neon-glow border-b border-gray-700 pb-2">UPGRADES (CP REQUIRED)</h2>
-                    <div id="upgrade-buttons" class="space-y-3">
-                        <!-- Upgrade buttons injected here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- 2. 3D Canvas and Output (Center Column) -->
-            <div class="lg:col-span-2">
-                <canvas id="game-canvas"></canvas>
-                
-                <!-- Price Control -->
-                <div class="mt-4 p-3 card-bg rounded-xl">
-                    <h3 class="text-lg font-bold text-white mb-2">Price Per Cup: <span id="game-price" class="neon-stat">$0.50</span></h3>
-                    <input type="range" min="0.50" max="2.50" step="0.50" value="0.50" id="price-slider" 
-                           oninput="updatePriceDisplay(this.value)" 
-                           onchange="gameState.pricePerCup = parseFloat(this.value); updateUI();"
-                           class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
-                    <p class="text-xs text-gray-400 mt-1">Low price = High Volume/Low CP. High price = Low Volume/High CP.</p>
-                </div>
-
-
-                <!-- Game Output Area -->
-                <div id="game-output" class="min-h-[120px] max-h-[250px] mt-4 p-3 bg-black border-2 border-gray-800 rounded-lg overflow-y-auto text-gray-300 text-sm">
-                    <p class="neon-glow">System initialized. Awaiting user input...</p>
-                </div>
-
-                <!-- Game Action Buttons -->
-                <div id="game-actions" class="mt-4 flex flex-wrap gap-2 justify-center">
-                    <!-- Action buttons injected here -->
-                </div>
-            </div>
-
+    const SoundCloudPlayer = {
+      template: `
+        <div class="audio-player">
+          <iframe id="sc-widget" width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" :src="embedUrl"></iframe>
+          <button @click="togglePlay">{{ isPlaying ? 'Pause' : 'Play' }}</button>
+          <div class="volume-control">
+            <label for="volume">Vol: {{ volume }}%</label>
+            <input id="volume" type="range" v-model="volume" min="0" max="100" step="1" @input="setVolume" />
+          </div>
         </div>
-    </div>
-
-    <script>
-        // --- Game State ---
-        let gameState = {
-            day: 0,
-            money: 50.00,
-            cupsLeft: 0,
-            pricePerCup: 0.50,
-            cp: 0, 
-            upgrades: {
-                truthSerum: false, 
-                holographicSign: false, 
-                redPillReady: false, 
-            },
-            isSelling: false, 
-            gameOver: false,
-            transactionStartTime: null, 
-            currentEvent: { type: 'NONE', modifier: 1, message: 'No active events.' }, 
-            dailyFollowUsed: false, 
-            
-            // Goals
-            escapeMoneyRequired: 200,
-            escapeCPRequired: 500,
-            
-            // Management Constants
-            COST_PER_10_CUPS: 15.00,
-            CUPS_PER_BATCH: 10,
+      `,
+      data() {
+        return {
+          embedUrl: 'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/davidbiga/sets/lemonade-stand&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false',
+          widget: null,
+          isPlaying: false,
+          volume: 50
         };
-
-        const TRANSACTION_DURATION_SECONDS = 3.0; 
-
-        const UPGRADE_COSTS = {
-            truthSerum: 100,
-            holographicSign: 250,
-            redPillReady: 500,
+      },
+      mounted() {
+        const script = document.createElement('script');
+        script.src = 'https://w.soundcloud.com/player/api.js';
+        script.async = true;
+        document.head.appendChild(script);
+        script.onload = () => {
+          this.widget = SC.Widget('sc-widget');
+          this.widget.bind(SC.Widget.Events.PLAY, () => this.isPlaying = true);
+          this.widget.bind(SC.Widget.Events.PAUSE, () => this.isPlaying = false);
+          this.widget.setVolume(this.volume / 100);
         };
+      },
+      methods: {
+        togglePlay() { if (this.widget) this.widget.toggle(); },
+        setVolume() { if (this.widget) this.widget.setVolume(this.volume / 100); }
+      }
+    };
 
-        const Scenes = {
-            START: 'START',
-            PREPARATION: 'PREPARATION', 
-            SELL: 'SELL',
-            END_DAY: 'END_DAY',
-            VICTORY: 'VICTORY',
-            FAILURE: 'FAILURE',
-        };
-        let currentScene = Scenes.START;
+    const Home = {
+      template: `
+        <div>
+          <h1>Welcome to Lemonade Stand: Escape the Matrix</h1>
+          <p>Manage a 2x2 matrix of stands over 10 days to maximize profits.</p>
+          <p>Enjoy tracks from the Lemonade Stand album while playing.</p>
+          <router-link to="/game">Start</router-link>
+        </div>
+      `,
+      created() { this.$store.commit('reset'); }
+    };
 
-
-        // --- UI Element References ---
-        const canvas = document.getElementById('game-canvas');
-        const gameOutput = document.getElementById('game-output');
-        const gameActions = document.getElementById('game-actions');
-        const upgradeButtonsDiv = document.getElementById('upgrade-buttons');
-        const statusCard = document.getElementById('stand-status-card');
-        const statusText = document.getElementById('stand-status-text');
-        const statusIndicator = document.getElementById('stand-status-indicator');
-
-        const uiElements = {
-            day: document.getElementById('game-day'),
-            money: document.getElementById('game-money'),
-            cups: document.getElementById('game-cups'),
-            cp: document.getElementById('game-cp'),
-            price: document.getElementById('game-price'),
-            event: document.getElementById('game-event'),
-            priceSlider: document.getElementById('price-slider')
-        };
-
-        // --- Three.js Setup (Simplified for combination) ---
-        let scene, camera, renderer;
-        let stand, cubeCustomer;
-        let mouseX = 0, mouseY = 0;
-        let cameraTarget = new THREE.Vector3(0, 0, 0);
-
-        function createHumanoid(isAgent, type) {
-            const group = new THREE.Group();
-            let bodyColor, headColor;
-            
-            if (isAgent) {
-                bodyColor = 0x111111; 
-                headColor = 0xaaaaaa; 
-            } else if (type === 'operator') {
-                bodyColor = 0x0066cc; 
-                headColor = 0xccaa99; 
-            } else { 
-                const colors = [0x00ff66, 0xff9900, 0x9900ff, 0x00ccff, 0xff00cc];
-                bodyColor = colors[Math.floor(Math.random() * colors.length)];
-                headColor = 0xccaa99; 
-            }
-
-            const bodyGeometry = new THREE.BoxGeometry(0.6, 1.2, 0.4);
-            const bodyMaterial = new THREE.MeshLambertMaterial({ color: bodyColor });
-            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            body.position.y = 1.0; 
-            group.add(body);
-
-            const headGeometry = new THREE.SphereGeometry(0.3, 16, 16);
-            const headMaterial = new THREE.MeshLambertMaterial({ color: headColor });
-            const head = new THREE.Mesh(headGeometry, headMaterial);
-            head.position.y = 1.8;
-            group.add(head);
-
-            group.position.y = 0; 
-            return group;
+    const Game = {
+      template: `
+        <div>
+          <h1>Day {{ day }}: Manage Matrix</h1>
+          <p>Assets: {{ (assets / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }} | Lemonade: {{ costOfLemonade }}¢ | Signs: 15¢</p>
+          <div v-for="stand in activeStands" :key="stand.id" class="stand-section">
+            <h3>Stand {{ stand.id + 1 }} - {{ positionLabel(stand.id) }} | Forecast: {{ forecastLabel(stand.forecast) }}</h3>
+            <p>Glasses: <input type="number" v-model.number="stand.glasses" min="1" step="1" /></p>
+            <p>Signs: <input type="number" v-model.number="stand.signs" min="0" step="1" /></p>
+            <p>Price (¢): <input type="number" v-model.number="stand.price" :min="costOfLemonade" step="1" /></p>
+          </div>
+          <button v-if="canBuyStand" @click="buyStand">Buy Stand ($0.50)</button>
+          <div v-if="errors.length" class="errors">
+            <strong>Errors:</strong> <ul><li v-for="(e, i) in errors" :key="i">{{ e }}</li></ul>
+          </div>
+          <button @click="initiateSales">Run Sales</button>
+        </div>
+      `,
+      computed: {
+        day() { return this.$store.state.day; },
+        assets() { return this.$store.state.assets; },
+        errors() { return this.$store.state.errors; },
+        activeStands() { return this.$store.getters.activeStands; },
+        canBuyStand() { return this.$store.getters.canBuyStand; },
+        costOfLemonade() { return this.$store.getters.costOfLemonade; },
+        forecastLabel() { return this.$store.getters.forecastLabel; },
+        positionLabel() { return this.$store.getters.positionLabel; }
+      },
+      created() { if (this.day === 0) this.$store.commit('generateForecasts'); },
+      methods: {
+        buyStand() {
+          this.$store.commit('buyStand');
+          this.$store.commit('generateForecasts');
+        },
+        initiateSales() {
+          const salesData = this.activeStands.map(s => ({
+            standId: s.id,
+            glasses: s.glasses,
+            signs: s.signs,
+            price: s.price,
+            costOfLemonade: this.costOfLemonade
+          }));
+          this.$store.commit('doSales', salesData);
+          if (!this.errors.length) this.$router.push('/report');
         }
-
-
-        function init3D() {
-            const width = canvas.clientWidth;
-            const height = 400; 
-
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a1a);
-
-            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-            camera.position.set(0, 5, 8); 
-            camera.lookAt(0, 0, 0);
-
-            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-            renderer.setSize(width, height);
-            renderer.setPixelRatio(window.devicePixelRatio);
-
-            const ambientLight = new THREE.AmbientLight(0x404040, 5); 
-            scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0x00ff66, 3); 
-            directionalLight.position.set(5, 10, 5);
-            scene.add(directionalLight);
-
-            const gridHelper = new THREE.GridHelper(20, 20, 0x00ff66, 0x333333);
-            scene.add(gridHelper);
-
-            const standGeometry = new THREE.BoxGeometry(2, 3, 2);
-            const standMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 }); 
-            stand = new THREE.Mesh(standGeometry, standMaterial);
-            stand.position.y = 1.5;
-            scene.add(stand);
-            
-            const operatorModel = createHumanoid(false, 'operator');
-            operatorModel.position.set(0, 0, -0.8); 
-            stand.add(operatorModel);
-
-            cubeCustomer = createHumanoid(false, 'human'); 
-            cubeCustomer.position.set(5, 0, 0); 
-            scene.add(cubeCustomer);
-
-            canvas.addEventListener('mousemove', onMouseMove, false);
-            canvas.addEventListener('mousedown', onMouseDown, false);
-            canvas.addEventListener('mouseup', onMouseUp, false);
-            window.addEventListener('resize', onWindowResize, false);
-        }
-
-        function onWindowResize() {
-            const width = canvas.clientWidth;
-            const height = 400; 
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-            renderer.setSize(width, height);
-        }
-
-        let isDragging = false;
-        function onMouseDown(event) { isDragging = true; }
-        function onMouseUp(event) { isDragging = false; }
-
-        function onMouseMove(event) {
-            if (!isDragging) return;
-            const sensitivity = 0.01;
-            mouseX += event.movementX * sensitivity;
-            mouseY += event.movementY * sensitivity;
-            mouseY = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, mouseY));
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Camera Update
-            const radius = 8;
-            camera.position.x = Math.sin(mouseX) * Math.cos(mouseY) * radius;
-            camera.position.y = 5 + Math.sin(mouseY) * radius * 0.5; 
-            camera.position.z = Math.cos(mouseX) * Math.cos(mouseY) * radius;
-            camera.lookAt(cameraTarget);
-
-            // Customer Animation
-            if (gameState.isSelling && gameState.transactionStartTime) {
-                const elapsed = (Date.now() - gameState.transactionStartTime) / 1000;
-                
-                if (elapsed <= 1.5) {
-                    const progress = elapsed / 1.5;
-                    cubeCustomer.position.x = 5 * (1 - progress);
-                } 
-                else if (elapsed <= 2.0) {
-                    cubeCustomer.position.x = 0;
-                    cubeCustomer.rotation.y += 0.05; 
-                }
-                else if (elapsed <= 3.0) {
-                    const walkAwayTime = elapsed - 2.0;
-                    const progress = walkAwayTime / 1.0;
-                    cubeCustomer.position.x = -5 * progress;
-                    cubeCustomer.rotation.y = 0;
-                }
-                else {
-                    cubeCustomer.position.x = 5;
-                    gameState.transactionStartTime = null;
-                }
-            } else if (cubeCustomer.position.x !== 5) {
-                cubeCustomer.position.x = 5;
-                cubeCustomer.rotation.y = 0;
-            }
-
-            renderer.render(scene, camera);
-        }
-
-        // --- UI & Game Logic Functions ---
-        
-        function updateStatusDisplay() {
-            statusCard.classList.remove('bg-red-600', 'bg-green-600', 'status-pulse');
-            
-            if (gameState.isSelling) {
-                // OPEN state: Green, Text, Sun icon, and Pulse Animation
-                statusCard.classList.add('bg-green-600', 'status-pulse');
-                statusText.textContent = "STAND OPEN!";
-                statusIndicator.textContent = "☀️";
-                uiElements.priceSlider.disabled = true; 
-            } else {
-                // CLOSED state: Red, Text, Stop icon, no pulse
-                statusCard.classList.add('bg-red-600');
-                if (currentScene === Scenes.PREPARATION) {
-                    statusText.textContent = "PREP MODE";
-                    statusIndicator.textContent = "🔨";
-                } else if (currentScene === Scenes.SELL) {
-                    statusText.textContent = "READY TO SELL";
-                    statusIndicator.textContent = "✅";
-                    uiElements.priceSlider.disabled = false;
-                } else {
-                    statusText.textContent = "SYSTEM OFFLINE";
-                    statusIndicator.textContent = "🛑";
-                    uiElements.priceSlider.disabled = true;
-                }
-                
-            }
-        }
-
-
-        function updateUI() {
-            uiElements.day.textContent = gameState.day;
-            uiElements.money.textContent = `$${gameState.money.toFixed(2)}`;
-            uiElements.cups.textContent = gameState.cupsLeft;
-            uiElements.cp.textContent = gameState.cp;
-            uiElements.price.textContent = `$${gameState.pricePerCup.toFixed(2)}`;
-            uiElements.event.textContent = gameState.currentEvent.message;
-            uiElements.event.className = `text-xs italic pt-2 border-t border-gray-700 ${gameState.currentEvent.type === 'NONE' ? 'text-gray-500' : 'text-orange-400'}`;
-            
-            updateStatusDisplay();
-            renderUpgrades();
-        }
-
-        window.updatePriceDisplay = function(value) {
-            uiElements.price.textContent = `$${parseFloat(value).toFixed(2)}`;
-        }
-
-
-        function addOutput(text, isImportant = false) {
-            const p = document.createElement('p');
-            p.textContent = text;
-            p.className = isImportant 
-                ? 'text-sm font-bold text-yellow-300' 
-                : 'text-xs text-gray-200'; 
-            gameOutput.prepend(p);
-            if (gameOutput.children.length > 10) {
-                gameOutput.removeChild(gameOutput.lastChild);
-            }
-        }
-
-        function createButton(text, action, className = 'neon-button') {
-            const button = document.createElement('button');
-            button.textContent = text;
-            button.className = `px-3 py-2 text-xs font-bold rounded-lg ${className}`;
-            button.onclick = action;
-            return button;
-        }
-
-        function dailyRandomEvent() {
-            const events = [
-                { type: 'GLITCH', modifier: 1.5, message: 'MATRIX GLITCH: Demand is abnormally high today. (+50% Demand)' },
-                { type: 'APATHY', modifier: 0.5, message: 'SYSTEM LETHARGY: Customers are extra apathetic today. (-50% Demand)' },
-                { type: 'AGENT', modifier: 0.8, message: 'AGENT SIGHTING: Increased surveillance lowers public interaction. (-20% Demand)' },
-                { type: 'WAKEUP', modifier: 2.0, message: 'MASS AWAKENING: CP gain is doubled today! (+100% CP)' },
-                { type: 'NONE', modifier: 1.0, message: 'No active events.' }
-            ];
-            
-            const eventIndex = Math.random() < 0.7 
-                ? Math.floor(Math.random() * (events.length - 1)) 
-                : 4; 
-
-            gameState.currentEvent = events[eventIndex];
-        }
-
-        function buyUpgrade(upgradeKey) {
-            const cost = UPGRADE_COSTS[upgradeKey];
-            if (gameState.cp >= cost && !gameState.upgrades[upgradeKey]) {
-                gameState.cp -= cost;
-                gameState.upgrades[upgradeKey] = true;
-                addOutput(`UPGRADE ACQUIRED: ${upgradeKey.toUpperCase()}! CP decreased by ${cost}.`, true);
-                updateUI();
-            } else if (gameState.upgrades[upgradeKey]) {
-                addOutput("Already purchased this upgrade.", true);
-            } else {
-                addOutput(`Insufficient CP. Need ${cost} CP.`, true);
-            }
-        }
-
-        function renderUpgrades() {
-            upgradeButtonsDiv.innerHTML = '';
-
-            const upgradesData = [
-                { key: 'truthSerum', label: 'Truth Serum (CP +)', desc: 'Boosts Consciousness gain per sale.', cost: UPGRADE_COSTS.truthSerum },
-                { key: 'holographicSign', label: 'Holo Sign (Demand +)', desc: 'Increases the number of potential customers.', cost: UPGRADE_COSTS.holographicSign },
-                { key: 'redPillReady', label: 'Red Pill Access (Escape Key)', desc: `Unlocks the final path to freedom. Cost: ${UPGRADE_COSTS.redPillReady} CP.`, cost: UPGRADE_COSTS.redPillReady },
-            ];
-
-            upgradesData.forEach(item => {
-                const isOwned = gameState.upgrades[item.key];
-                const canAfford = gameState.cp >= item.cost;
-
-                const button = createButton(
-                    isOwned ? 'ACTIVE' : `BUY: ${item.cost} CP`,
-                    () => buyUpgrade(item.key),
-                    'neon-button' + (isOwned ? ' opacity-50' : (canAfford ? '' : ' opacity-30'))
-                );
-                button.disabled = isOwned || !canAfford;
-
-                const label = document.createElement('span');
-                label.textContent = item.label;
-                label.className = 'text-white text-xs font-bold';
-
-                const desc = document.createElement('span');
-                desc.textContent = item.desc;
-                desc.className = 'text-gray-500 text-[10px]';
-                
-                const infoDiv = document.createElement('div');
-                infoDiv.className = 'flex flex-col';
-                infoDiv.appendChild(label);
-                infoDiv.appendChild(desc);
-                
-                const controlDiv = document.createElement('div');
-                controlDiv.className = 'flex justify-between items-center';
-                controlDiv.appendChild(infoDiv);
-                controlDiv.appendChild(button);
-                
-                upgradeButtonsDiv.appendChild(controlDiv);
-            });
-        }
-        
-        function followAction() {
-            if (gameState.dailyFollowUsed) {
-                addOutput("SYSTEM WARNING: Social leverage already used today. Wait for the next cycle.", true);
-                return;
-            }
-
-            const moneyGain = 5.00;
-            const cpGain = 1;
-
-            gameState.money += moneyGain;
-            gameState.cp += cpGain;
-            gameState.dailyFollowUsed = true;
-
-            // Open a blank window to simulate the "follow" action without redirecting the main page
-            window.open('https://www.instagram.com/davidbiga', '_blank');
-
-            addOutput(`SYSTEM HACK SUCCESSFUL: +$${moneyGain.toFixed(2)} and +${cpGain} CP received from social network engagement!`, true);
-            updateUI();
-            renderScene(); 
-        }
-
-        // --- Game Scene Logic ---
-
-        function renderScene() {
-            gameActions.innerHTML = '';
-            
-            // --- VICTORY CHECK ---
-            const victoryMet = (gameState.upgrades.redPillReady && gameState.money >= gameState.escapeMoneyRequired && gameState.cp >= gameState.escapeCPRequired);
-
-            if (victoryMet && currentScene !== Scenes.VICTORY) {
-                 gameActions.appendChild(createButton(`INITIATE RED PILL SEQUENCE (ESCAPE)`, () => {
-                             currentScene = Scenes.VICTORY;
-                             addOutput(`[ESCAPE CONDITION MET] $${gameState.escapeMoneyRequired} and ${gameState.escapeCPRequired} CP acquired. Preparing escape sequence...`, true);
-                             updateUI();
-                             renderScene();
-                         }, 'bg-red-600 hover:bg-red-400'));
-                return;
-            }
-
-
-            if (gameState.gameOver) {
-                currentScene = Scenes.FAILURE;
-            }
-
-            switch (currentScene) {
-                case Scenes.START:
-                    addOutput("WAKE UP, OPERATOR. Your identity is 'The Lemonade Stand.' Use it to break the system.", true);
-                    gameActions.appendChild(createButton("Start Day 1", () => {
-                        gameState.day = 1;
-                        dailyRandomEvent(); 
-                        currentScene = Scenes.PREPARATION;
-                        updateUI();
-                        renderScene(); 
-                    }));
-                    break;
-
-                case Scenes.PREPARATION:
-                    addOutput(`[DAY ${gameState.day} PREPARATION]. You have $${gameState.money.toFixed(2)}. Supplies for 10 cups cost $${gameState.COST_PER_10_CUPS.toFixed(2)}.`);
-                    
-                    const buyButton = createButton(`Buy ${gameState.CUPS_PER_BATCH} Cups ($${gameState.COST_PER_10_CUPS.toFixed(2)})`, () => {
-                        if (gameState.money >= gameState.COST_PER_10_CUPS) {
-                            gameState.money -= gameState.COST_PER_10_CUPS;
-                            gameState.cupsLeft += gameState.CUPS_PER_BATCH;
-                            addOutput("Supplies purchased. You can now start selling.", true);
-                            updateUI();
-                            renderScene(); 
-                        } else {
-                            addOutput("SYSTEM WARNING: INSUFFICIENT FUNDS. Cannot buy supplies.", true);
-                        }
-                    });
-                    buyButton.disabled = gameState.money < gameState.COST_PER_10_CUPS;
-                    gameActions.appendChild(buyButton);
-
-                    // Go to Sell Mode if supplies are available
-                    if (gameState.cupsLeft > 0) {
-                        gameActions.appendChild(createButton("Set Up Stand and Start Selling", () => {
-                            currentScene = Scenes.SELL;
-                            addOutput("Stand is open. Choose a price to interact with the Matrix!", true);
-                            updateUI();
-                            renderScene();
-                        }, 'bg-green-600 hover:bg-green-400'));
-                    }
-                    
-                    // End Day (Only available if supplies are 0 or player chooses to skip)
-                    if (gameState.day > 1 || gameState.cupsLeft === 0) {
-                         gameActions.appendChild(createButton("Pack Up and End Day", () => {
-                            currentScene = Scenes.END_DAY; 
-                            updateUI();
-                            renderScene();
-                        }));
-                    }
-                    break;
-
-                case Scenes.SELL:
-                    addOutput(`You have ${gameState.cupsLeft} cups. Set your price and click SELL to start a transaction...`);
-                    addOutput(`[Current Event] ${gameState.currentEvent.message}`, false);
-
-                    const sellButton = createButton(`INITIATE TRANSACTION @ $${gameState.pricePerCup.toFixed(2)}`, () => sellLemonade());
-                    
-                    if (gameState.isSelling || gameState.cupsLeft === 0) {
-                        sellButton.disabled = true;
-                        sellButton.textContent = gameState.isSelling ? "TRANSACTION IN PROGRESS (3s)" : "OUT OF CUPS";
-                        sellButton.className = 'px-3 py-2 text-xs font-bold rounded-lg opacity-30 bg-gray-700 text-gray-400 cursor-wait';
-                    }
-                    gameActions.appendChild(sellButton);
-                    
-                    const followButton = createButton(
-                        "FOLLOW @DavidBiga (+1 CP, +$5.00)", 
-                        followAction,
-                        'bg-purple-600 hover:bg-purple-400 text-white'
-                    );
-                    if (gameState.dailyFollowUsed || gameState.isSelling) {
-                        followButton.disabled = true;
-                        followButton.className = 'px-3 py-2 text-xs font-bold rounded-lg opacity-30 bg-gray-700 text-gray-400 cursor-not-allowed';
-                    }
-                    gameActions.appendChild(followButton);
-
-
-                    const endDayButton = createButton("Pack Up and End Day", () => {
-                        currentScene = Scenes.END_DAY;
-                        updateUI();
-                        renderScene(); 
-                    });
-                    if (gameState.isSelling) { endDayButton.disabled = true; endDayButton.className += ' opacity-30'; }
-                    gameActions.appendChild(endDayButton);
-                    
-                    break;
-
-                case Scenes.END_DAY:
-                    addOutput(`[DAY ${gameState.day} ENDED]. Unsold cups (${gameState.cupsLeft}) are discarded.`, true);
-                    addOutput(`Current Stats: Money: $${gameState.money.toFixed(2)}. CP: ${gameState.cp}.`, true);
-                    
-                    gameState.cupsLeft = 0; 
-                    
-                    if (gameState.money < gameState.COST_PER_10_CUPS && gameState.cp < UPGRADE_COSTS.truthSerum) { 
-                         gameState.gameOver = true;
-                    }
-                    
-                    if (gameState.gameOver) {
-                         currentScene = Scenes.FAILURE;
-                         updateUI();
-                         renderScene();
-                         return;
-                    }
-
-                    gameActions.appendChild(createButton(`Start Day ${gameState.day + 1}`, () => {
-                        gameState.day++;
-                        gameState.dailyFollowUsed = false; 
-                        dailyRandomEvent(); 
-                        currentScene = Scenes.PREPARATION;
-                        updateUI();
-                        renderScene(); 
-                    }));
-                    break;
-
-                case Scenes.VICTORY:
-                    addOutput(`TRANSMISSION SUCCESSFUL. Final Money: $${gameState.money.toFixed(2)}. CP: ${gameState.cp}.`, true);
-                    addOutput("You transcended the financial illusion and woke up the masses. The Matrix has failed. FREEDOM. ", true);
-                    gameActions.appendChild(createButton("REBOOT SIMULATION", resetGame));
-                    break;
-
-                case Scenes.FAILURE:
-                    addOutput("SYSTEM CRITICAL ERROR. You failed to break the cycle or ran out of funds. Trapped in the loop.", true);
-                    addOutput(`Final Stats: Money $${gameState.money.toFixed(2)}, CP ${gameState.cp}.`, true);
-                    gameActions.appendChild(createButton("REBOOT SIMULATION", resetGame));
-                    break;
-            }
-        }
-
-        // --- Selling Logic ---
-        function sellLemonade() {
-            if (gameState.cupsLeft === 0) {
-                addOutput("Error: No lemonade left to sell!", true);
-                currentScene = Scenes.PREPARATION;
-                renderScene();
-                return;
-            }
-            if (gameState.isSelling) return; 
-
-            // --- 0. Setup and Agent Check ---
-            const price = gameState.pricePerCup;
-            gameState.isSelling = true; 
-            gameState.transactionStartTime = Date.now(); 
-            
-            const isAgent = Math.random() < 0.2; 
-            
-            if (cubeCustomer) scene.remove(cubeCustomer);
-            cubeCustomer = createHumanoid(isAgent, isAgent ? 'agent' : 'human'); 
-            cubeCustomer.position.set(5, 0, 0); 
-            scene.add(cubeCustomer);
-
-            // --- 1. Base Demand & Impact Multipliers ---
-            let baseDemand;
-            let cpMultiplier;
-
-            if (price <= 0.50) { 
-                baseDemand = 10;
-                cpMultiplier = 0.5;
-            } else if (price <= 1.50) { 
-                baseDemand = 6;
-                cpMultiplier = 1.0;
-            } else { 
-                baseDemand = 3;
-                cpMultiplier = 2.5;
-            }
-            
-            let actualSales = 0;
-            let revenue = 0;
-            let cpGained = 0;
-            
-            // --- 2. Calculation Logic (Bypassed if Agent) ---
-            if (isAgent) {
-                addOutput("AGENT DETECTED: They block the stand, consuming time but purchasing nothing.", true);
-            } else {
-                // Human Customer Logic (Normal Calculation)
-                const dayMultiplier = 1 + (gameState.day * 0.1); 
-                baseDemand *= dayMultiplier;
-
-                if (gameState.currentEvent.type === 'WAKEUP') {
-                     cpMultiplier *= gameState.currentEvent.modifier;
-                } else {
-                     baseDemand *= gameState.currentEvent.modifier;
-                }
-                
-                if (gameState.upgrades.holographicSign) {
-                    baseDemand += 4;
-                }
-                if (gameState.upgrades.truthSerum) {
-                    cpMultiplier *= 1.5;
-                }
-
-                const apathyLevel = Math.random() * 0.7 + 0.6; 
-                let potentialSales = Math.floor(baseDemand / apathyLevel);
-                
-                actualSales = Math.min(Math.max(0, potentialSales), gameState.cupsLeft);
-                
-                revenue = actualSales * price;
-                cpGained = Math.floor(actualSales * cpMultiplier);
-
-                gameState.money += revenue;
-                gameState.cupsLeft -= actualSales;
-                gameState.cp += cpGained;
-            }
-
-            // --- 3. UI Lock and Resolution ---
-            addOutput(`TRANSMISSION: Initiating sale @ $${price.toFixed(2)}...`, false);
-            renderScene(); 
-            updateUI(); 
-
-            // Simulate transaction time before proceeding
-            setTimeout(() => {
-                gameState.isSelling = false; 
-                gameState.transactionStartTime = null; 
-
-                // Final transaction feedback
-                if (isAgent) {
-                     addOutput("AGENT SCANNED. The threat has passed for now. Stay vigilant.", true);
-                } else if (actualSales > 0) {
-                    addOutput(`SOLD: ${actualSales} cups. REVENUE: $${revenue.toFixed(2)}. CP GAINED: ${cpGained}.`, true);
-                } else {
-                    addOutput(`Apathy is high. Zero sales, zero impact.`, true);
-                }
-
-                // If cups run out, immediately prompt to end day or buy supplies
-                if (gameState.cupsLeft === 0) {
-                    currentScene = Scenes.END_DAY;
-                }
-
-                renderScene(); 
-            }, TRANSACTION_DURATION_SECONDS * 1000); 
-        }
-
-        function resetGame() {
-            gameState = {
-                day: 0,
-                money: 50.00,
-                cupsLeft: 0,
-                pricePerCup: 0.50,
-                cp: 0,
-                upgrades: {
-                    truthSerum: false,
-                    holographicSign: false,
-                    redPillReady: false,
-                },
-                isSelling: false,
-                gameOver: false,
-                transactionStartTime: null,
-                currentEvent: { type: 'NONE', modifier: 1, message: 'No active events.' },
-                dailyFollowUsed: false, 
-                escapeMoneyRequired: 200,
-                escapeCPRequired: 500,
-                COST_PER_10_CUPS: 15.00,
-                CUPS_PER_BATCH: 10,
-            };
-            currentScene = Scenes.START;
-            gameOutput.innerHTML = '<p class="neon-glow">System initialized. Awaiting user input...</p>';
-            updateUI();
-            renderScene(); 
-        }
-
-
-        // --- Initialization ---
-
-        window.onload = function () {
-            init3D();
-            animate();
-            resetGame();
-        };
-
-    </script>
+      }
+    };
+
+    const Report = {
+      template: `
+        <div>
+          <h1>Day {{ day }} Report</h1>
+          <p v-if="message"><strong>{{ message }}</strong></p>
+          <div class="matrix-grid">
+            <div v-for="r in salesReport" :key="r.standId" :class="\`matrix-cell stand-\${r.standId}\`">
+              <h3>Stand {{ r.standId + 1 }} ({{ positionLabel(r.standId) }})</h3>
+              <p>Sold: {{ r.glassesSold }}</p>
+              <p>Income: {{ (r.income / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }}</p>
+              <p>Expenses: {{ (r.standCost / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }}</p>
+            </div>
+          </div>
+          <p>Total Income: {{ totalIncome.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }} | Expenses: {{ totalExpenses.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }} | Profit: {{ profit.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }}</p>
+          <p>Assets: {{ (assets / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }}</p>
+          <div v-if="isGameOver">
+            <h2>Game Over! Assets: {{ (assets / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' }) }}</h2>
+            <p v-if="assets >= 1000">High Score! License via NovelistMusicGroup.com.</p>
+            <p v-else-if="assets >= 500">Solid Effort.</p>
+            <p v-else>Bankrupt - Retry.</p>
+            <router-link to="/">Again</router-link>
+          </div>
+          <router-link v-else to="/game">Next</router-link>
+        </div>
+      `,
+      computed: {
+        day() { return this.$store.state.day; },
+        assets() { return this.$store.state.assets; },
+        message() { return this.$store.state.message; },
+        salesReport() { return this.$store.state.salesReport; },
+        totalIncome() { return this.$store.getters.totalIncome; },
+        totalExpenses() { return this.$store.getters.totalExpenses; },
+        profit() { return this.$store.getters.profit; },
+        isGameOver() { return this.$store.getters.isGameOver; },
+        positionLabel() { return this.$store.getters.positionLabel; }
+      },
+      created() {
+        if (this.day === 0 || !this.salesReport.length) this.$router.push('/');
+        if (!this.isGameOver) this.$store.commit('generateForecasts');
+      }
+    };
+
+    const routes = [
+      { path: '/', component: Home },
+      { path: '/game', component: Game },
+      { path: '/report', component: Report }
+    ];
+
+    const router = createRouter({
+      history: createWebHistory(),
+      routes
+    });
+
+    const app = createApp({
+      components: { 'sound-cloud-player': SoundCloudPlayer }
+    });
+    app.use(router);
+    app.use(store);
+    app.mount('#app');
+  </script>
 </body>
 </html>
